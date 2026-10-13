@@ -1,0 +1,110 @@
+# Vite+ official GitLab setup: installs the global `vp`, selects Node from
+# .node-version and runs `vp install` (package manager from devEngines in
+# package.json). Bump the URL tag and `setup-ref` together.
+# https://viteplus.dev/guide/ci#gitlab-ci-cd
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.2/gitlab/setup-vp.yml"
+    inputs:
+      setup-ref: "v1.21.2"
+      node-version-file: ".node-version"
+
+# The template needs Node to run and Bash + curl to bootstrap. Full image, not
+# slim: `vp` is a Rust binary that panics at startup without a system CA store,
+# and slim ships none.
+image: node:24
+
+stages:
+  - quality
+  - build
+  - deploy
+
+variables:
+  GIT_DEPTH: 10
+  GIT_STRATEGY: fetch
+  # Space-separated names of CI/CD variables to push as Worker secrets on deploy,
+  # e.g. "API_KEY DATABASE_URL". Empty = no secrets.
+  WORKER_SECRET_NAMES: ""
+
+# Superseded pipelines die on the next push, but only jobs marked `interruptible`.
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - when: always
+
+# Every job gets `vp` + installed dependencies, cached per job and branch.
+.vp_job:
+  extends: .setup-vp-cached
+  interruptible: true
+
+# No separate lint/format/tsc jobs: `vp check` covers format + lint + types
+# (`lint.options.typeCheck`). Routes are regenerated first so the type check never
+# runs against a stale or missing src/routeTree.gen.ts.
+check:
+  extends: .vp_job
+  stage: quality
+  script:
+    - vpr generate-routes
+    - vp check
+
+test:
+  extends: .vp_job
+  stage: quality
+  script:
+    - vp test
+
+# `VITE_*` vars are inlined into the bundle at build time, so they must exist as
+# CI/CD variables (not protected, so branch builds get them too).
+.build_job:
+  extends: .vp_job
+  stage: build
+  needs: ["check", "test"]
+
+build:validate:
+  extends: .build_job
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main"
+  script:
+    - vp build
+
+# The Cloudflare Vite plugin writes the deployable Worker config into dist/ and a
+# pointer to it at .wrangler/deploy/config.json - `wrangler deploy` needs both.
+build:production:
+  extends: .build_job
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - vp build
+  artifacts:
+    paths:
+      - dist/
+      - .wrangler/deploy/
+    expire_in: 1 day
+
+# Auth comes from CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (masked + protected
+# CI/CD variables; only main deploys). Secrets travel via `--secrets-file`, set
+# together with the new version. The file is JSON built with node, so a quote or
+# `#` in a value cannot break it.
+deploy:production:
+  extends: .setup-vp-cached
+  stage: deploy
+  needs: ["build:production"]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  resource_group: production
+  environment:
+    name: production
+  script:
+    # Copies GitLab CI/CD variables listed in WORKER_SECRET_NAMES into Worker secrets.
+    # To add a secret: create the CI/CD variable (masked + protected), then add its
+    # name to WORKER_SECRET_NAMES. With no names it writes `{}` and deploys as usual.
+    - SECRETS_FILE="$(mktemp)"
+    # Block scalar: the `: ` inside the JS would otherwise parse as a YAML map.
+    - >-
+      node -e 'const names = (process.env.WORKER_SECRET_NAMES || "").split(/\s+/).filter(Boolean);
+      const missing = names.filter((name) => process.env[name] === undefined);
+      if (missing.length) throw new Error("Missing CI/CD variables: " + missing.join(", "));
+      require("fs").writeFileSync(process.argv[1], JSON.stringify(Object.fromEntries(names.map((name) => [name, process.env[name]]))))' "$SECRETS_FILE"
+    - vp exec wrangler deploy --secrets-file "$SECRETS_FILE"
