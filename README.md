@@ -14,6 +14,18 @@ Simple starter for [TanStack Start](https://tanstack.com/start) apps, deployed t
 | Deploy    | Cloudflare Workers (`@cloudflare/vite-plugin` + Wrangler)                                          |
 | Compiler  | React Compiler                                                                                     |
 
+## Create a new project from this template
+
+```bash
+vp create github:diploidal/tanstack-start-vp-tempalte --directory my-app --package-manager pnpm --git --no-agent --no-editor
+```
+
+- `--directory my-app` - folder for the new project
+- `--package-manager pnpm` - same package manager as the template
+- `--git` - start a git repo
+- `--no-agent` / `--no-editor` - skip `vp`'s own agent files and editor settings; the template already has `AGENTS.md`, `.vscode/` and `.zed/`
+- Add `--no-interactive` to skip all prompts
+
 ## Getting started
 
 ```bash
