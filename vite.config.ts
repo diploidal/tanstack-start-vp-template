@@ -10,7 +10,7 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 const config = defineConfig({
   staged: {
-    "*": "vp check --fix",
+    "*": "vp check",
   },
   fmt: {
     ignorePatterns: ["src/routeTree.gen.ts", "worker-configuration.d.ts"],

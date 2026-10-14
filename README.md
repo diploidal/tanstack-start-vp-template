@@ -10,6 +10,7 @@ Simple starter for [TanStack Start](https://tanstack.com/start) apps, deployed t
 | Toolchain | [Vite+](https://viteplus.dev) (`vp`) - dev, build, lint, format, test                              |
 | UI        | [shadcn/ui](https://ui.shadcn.com) on [React Aria](https://react-aria.adobe.com) + Tailwind CSS v4 |
 | Theming   | [`@wrksz/themes`](https://themes.wrksz.dev) - light / dark / system via `[data-theme]`             |
+| Data      | [TanStack Query](https://tanstack.com/query) - cached server state, SSR hydration                  |
 | Env vars  | Vite `import.meta.env` (client) + Cloudflare Worker `env` (server)                                 |
 | Deploy    | Cloudflare Workers (`@cloudflare/vite-plugin` + Wrangler)                                          |
 | Compiler  | React Compiler                                                                                     |
@@ -17,14 +18,16 @@ Simple starter for [TanStack Start](https://tanstack.com/start) apps, deployed t
 ## Create a new project from this template
 
 ```bash
-vp create github:diploidal/tanstack-start-vp-tempalte --directory my-app --package-manager pnpm --git --no-agent --no-editor
+vp create github:diploidal/tanstack-start-vp-tempalte --package-manager pnpm --git --no-agent --no-editor -- my-app
 ```
 
-- `--directory my-app` - folder for the new project
+- `-- my-app` - folder for the new project (`--directory` only works for built-in templates)
 - `--package-manager pnpm` - same package manager as the template
 - `--git` - start a git repo
 - `--no-agent` / `--no-editor` - skip `vp`'s own agent files and editor settings; the template already has `AGENTS.md`, `.vscode/` and `.zed/`
 - Add `--no-interactive` to skip all prompts
+
+Then rename the project in `package.json` and `wrangler.jsonc` - the `wrangler.jsonc` `name` is the Worker name, so a leftover template name would overwrite the template's Worker on deploy.
 
 ## Getting started
 
@@ -49,7 +52,7 @@ App runs on http://localhost:5173.
 
 - `vp <name>` runs a built-in Vite+ command
 - `vpr <name>` (same as `vp run <name>`) runs a `package.json` script
-- A pre-commit hook runs `vp check --fix` on staged files
+- A pre-commit hook runs `vp check` on staged files and blocks the commit on errors - it never edits files; run `vp check --fix` yourself
 
 ## Project structure
 
@@ -58,6 +61,7 @@ src/
   components/
     ui/          shadcn components (generated - edit freely)
   lib/           shared helpers (theme config, utils)
+    queries/     `queryOptions` factories + their server functions
   routes/        file-based routes; __root.tsx is the app shell
   globals.css    theme variables, Tailwind theme, base styles
   vite-env.d.ts  client env var types
@@ -84,6 +88,41 @@ React Aria links (e.g. `LinkButton`) navigate through TanStack Router thanks to 
 - `ThemeScript` in `<head>` sets the theme before first paint - no flash
 - Shared config is in `src/lib/theme.ts`
 - Theme colors are CSS variables in `src/globals.css`; `dark:` Tailwind variants follow `[data-theme="dark"]`
+
+## Data fetching
+
+TanStack Query is wired into the router with `@tanstack/react-router-ssr-query`:
+
+- `getRouter()` in `src/router.tsx` makes a new `QueryClient` per request - never create one at module level, the Worker would share cache between users
+- Data loaded on the server is sent with the HTML and reused on the client - no refetch after hydration
+- Default `staleTime` is 60s; loaders always run (`defaultPreloadStaleTime: 0`) and Query decides what to refetch
+- Query devtools are a panel in the TanStack devtools
+
+Pattern - see `src/routes/query-example.tsx` and `src/lib/queries/server-time.ts`:
+
+```ts
+// src/lib/queries/todos.ts
+const getTodos = createServerFn({ method: "GET" }).handler(() => db.todos.list());
+
+export function todosQueryOptions() {
+  return queryOptions({ queryKey: ["todos"], queryFn: () => getTodos() });
+}
+
+// src/routes/todos.tsx
+export const Route = createFileRoute("/todos")({
+  loader: ({ context }) => context.queryClient.query(todosQueryOptions()),
+  component: Todos,
+});
+
+function Todos() {
+  const { data } = useSuspenseQuery(todosQueryOptions());
+  // ...
+}
+```
+
+- Loader starts the fetch on the server or on link hover (preload); the component reads the cache
+- Use `queryClient.query()` - `ensureQueryData` / `fetchQuery` / `prefetchQuery` are deprecated
+- Starting a new project: delete `src/routes/query-example.tsx`, `src/lib/queries/server-time.ts` and its link in `src/components/nav.tsx`
 
 ## Env vars
 

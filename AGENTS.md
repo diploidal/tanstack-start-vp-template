@@ -25,3 +25,10 @@ release. Add a tool name to select part of the graph. For example, run
 - [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
 
 <!--VITE PLUS END-->
+
+## Data fetching (TanStack Query)
+
+- `QueryClient` is created per request in `getRouter()` (`src/router.tsx`) and passed as router context - never create one at module level
+- Put each query in a `queryOptions()` factory in `src/lib/queries/`; use a `createServerFn` as `queryFn` for server-only code
+- In loaders call `context.queryClient.query(options)`; in components use `useSuspenseQuery(options)` with the same factory
+- Don't use deprecated `ensureQueryData`, `fetchQuery` or `prefetchQuery` - use `queryClient.query()`

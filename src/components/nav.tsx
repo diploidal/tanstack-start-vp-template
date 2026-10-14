@@ -9,6 +9,9 @@ export function Nav() {
         <Link to="/" activeProps={{ className: "font-semibold" }}>
           Home
         </Link>
+        <Link to="/query-example" activeProps={{ className: "font-semibold" }}>
+          Query example
+        </Link>
       </nav>
       <ThemeSelector />
     </header>
