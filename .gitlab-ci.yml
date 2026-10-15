@@ -40,13 +40,15 @@ workflow:
   interruptible: true
 
 # No separate lint/format/tsc jobs: `vp check` covers format + lint + types
-# (`lint.options.typeCheck`). Routes are regenerated first so the type check never
-# runs against a stale or missing src/routeTree.gen.ts.
+# (`lint.options.typeCheck`). Routes and Worker types are regenerated first so the
+# type check never runs against a stale or missing src/routeTree.gen.ts or
+# worker-configuration.d.ts (gitignored).
 check:
   extends: .vp_job
   stage: quality
   script:
     - vpr generate-routes
+    - vpr cf-typegen
     - vp check
 
 test:

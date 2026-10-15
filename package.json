@@ -9,7 +9,7 @@
     "preview": "vp preview",
     "deploy": "vp build && wrangler deploy",
     "cf-typegen": "wrangler types",
-    "prepare": "vp config"
+    "prepare": "vp config && wrangler types"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
