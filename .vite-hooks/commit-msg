@@ -1,0 +1,15 @@
+subject=$(head -n 1 "$1")
+
+# Git's own messages (merge, revert, fixup/squash for autosquash)
+case "$subject" in
+  Merge\ * | Revert\ * | fixup!\ * | squash!\ * | amend!\ *) exit 0 ;;
+esac
+
+types="feat|fix|docs|refactor|perf|test|style|build|ci|chore|revert"
+
+if ! printf '%s\n' "$subject" | grep -qE "^($types)(\([a-z0-9-]+\))?!?: .+"; then
+  echo "Commit message must follow Conventional Commits: type(scope): description"
+  echo "Types: $types"
+  echo "Got: $subject"
+  exit 1
+fi

@@ -10,7 +10,8 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 const config = defineConfig({
   staged: {
-    "*": "vp check",
+    // A change can break lint or types in files that aren't staged, so check the whole project
+    "*": () => "vp check",
   },
   fmt: {
     ignorePatterns: ["src/routeTree.gen.ts", "worker-configuration.d.ts"],

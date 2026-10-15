@@ -52,7 +52,9 @@ App runs on http://localhost:5173.
 
 - `vp <name>` runs a built-in Vite+ command
 - `vpr <name>` (same as `vp run <name>`) runs a `package.json` script
-- A pre-commit hook runs `vp check` on staged files and blocks the commit on errors - it never edits files; run `vp check --fix` yourself
+- Git hooks (`.vite-hooks/`) block the commit on errors and never edit files - run `vp check --fix` yourself
+  - `pre-commit` - `vp check` on the whole project, since a change can break lint or types in other files; unstaged changes are hidden during the check, so only what you commit is checked
+  - `commit-msg` - message must follow [Conventional Commits](https://www.conventionalcommits.org): `type(scope): description`
 
 ## Project structure
 
